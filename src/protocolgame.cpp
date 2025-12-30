@@ -1729,8 +1729,10 @@ void ProtocolGame::sendClientFeatures()
 	msg.addDouble(Creature::speedB, 3);
 	msg.addDouble(Creature::speedC, 3);
 
-	// can report bugs?
-	msg.addByte(player->getAccountType() >= ACCOUNT_TYPE_TUTOR ? 0x01 : 0x00);
+	if (version < 1317) { // everybody can report bugs on 13.17+
+		// can report bugs?
+		msg.addByte(player->getAccountType() >= ACCOUNT_TYPE_TUTOR ? 0x01 : 0x00);
+	}
 
 	msg.addByte(0x00); // can change pvp framing option
 	msg.addByte(0x00); // expert mode button enabled
@@ -1738,8 +1740,10 @@ void ProtocolGame::sendClientFeatures()
 	msg.add<uint16_t>(0x00); // store images url (string or u16 0x00)
 	msg.add<uint16_t>(25);   // premium coin package size
 
-	msg.addByte(0x00); // exiva button enabled (bool)
-	msg.addByte(0x00); // Tournament button (bool)
+	msg.addByte(0x00);     // exiva button enabled (bool)
+	if (version < 1317) {  // maybe it should be less than that, dont know when it was removed
+		msg.addByte(0x00); // Tournament button (bool)
+	}
 
 	writeToOutputBuffer(msg);
 }
@@ -3300,9 +3304,27 @@ void ProtocolGame::sendItemClasses()
 		}
 	}
 
-	// unknown
-	for (uint8_t i = 0; i < tiersSize + 1; i++) {
-		msg.addByte(0);
+	// exaltation transfer core cost
+	msg.addByte(tiersSize);
+	for (uint8_t i = 0; i < tiersSize; i++) {
+		msg.addByte(i);
+		if (version >= 1317) {
+			msg.addByte(10);
+		}
+	}
+
+	if (version >= 1317) {
+		msg.addByte(1);       // dust cost multiplier
+		msg.addByte(1);       // generated silver when converting dust
+		msg.addByte(1);       // current silver amount
+		msg.addByte(1);       // unknown
+		msg.add<uint16_t>(1); // maximum dust
+		msg.add<uint16_t>(1); // next maximum dust
+		msg.addByte(1);       // current dust
+		msg.addByte(1);       // dust required for transfer
+		msg.addByte(1);       // success rate
+		msg.addByte(1);       // unknown
+		msg.addByte(1);       // unknown
 	}
 
 	writeToOutputBuffer(msg);
