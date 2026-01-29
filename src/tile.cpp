@@ -1086,7 +1086,7 @@ bool Tile::hasCreature(const std::shared_ptr<Creature>& creature) const
 
 void Tile::removeCreature(const std::shared_ptr<Creature>& creature)
 {
-	g_game.map.getQTNode(tilePos.x, tilePos.y)->removeCreature(creature);
+	g_game.map.getChunk(tilePos.x, tilePos.y)->removeCreature(creature);
 	removeThing(creature, 0);
 }
 

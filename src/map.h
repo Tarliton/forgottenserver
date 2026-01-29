@@ -78,18 +78,15 @@ struct Floor
 
 class FrozenPathingConditionCall;
 
-class QTreeLeafNode final
+class Chunk
 {
 public:
-	QTreeLeafNode()
-	{
-		newLeaf = true;
-	}
-	~QTreeLeafNode();
+	Chunk() = default;
+	~Chunk();
 
 	// non-copyable
-	QTreeLeafNode(const QTreeLeafNode&) = delete;
-	QTreeLeafNode& operator=(const QTreeLeafNode&) = delete;
+	Chunk(const Chunk&) = delete;
+	Chunk& operator=(const Chunk&) = delete;
 
 	Floor* createFloor(uint32_t z);
 	Floor* getFloor(uint8_t z) const { return array[z]; }
@@ -98,9 +95,6 @@ public:
 	void removeCreature(const std::shared_ptr<Creature>& c) { creatures.erase(c); }
 
 private:
-	static bool newLeaf;
-	QTreeLeafNode* leafS = nullptr;
-	QTreeLeafNode* leafE = nullptr;
 	Floor* array[MAP_MAX_LAYERS] = {};
 	boost::container::flat_set<std::shared_ptr<Creature>> creatures;
 
@@ -234,7 +228,7 @@ public:
 
 	std::map<std::string, Position> waypoints;
 
-	QTreeLeafNode* getQTNode(uint16_t x, uint16_t y)
+	Chunk* getChunk(uint16_t x, uint16_t y)
 	{
 		const auto it = chunks.find(calculateChunkID(x,y));
 		if (it == chunks.end()) {
@@ -267,7 +261,7 @@ private:
 	SpectatorCache spectatorCache;
 	SpectatorCache playersSpectatorCache;
 
-	std::flat_map<uint32_t, std::unique_ptr<QTreeLeafNode>> chunks;
+	std::flat_map<uint32_t, std::unique_ptr<Chunk>> chunks;
 
 	uint32_t width = 0;
 	uint32_t height = 0;

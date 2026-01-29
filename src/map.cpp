@@ -142,7 +142,7 @@ void Map::setTile(uint16_t x, uint16_t y, uint8_t z, const std::shared_ptr<Tile>
 	}
 
 	auto chunkID = calculateChunkID(x, y);
-	chunks.emplace(chunkID, std::make_unique<QTreeLeafNode>());
+	chunks.emplace(chunkID, std::make_unique<Chunk>());
 	const auto floor = chunks[chunkID]->createFloor(z);
 	auto& tile = floor->tiles[y & FLOOR_MASK][x & FLOOR_MASK];
 	if (!tile) {
@@ -254,7 +254,7 @@ bool Map::placeCreature(const Position& centerPos, const std::shared_ptr<Creatur
 	toThing->internalAddThing(creature);
 
 	const Position& dest = toThing->getPosition();
-	getQTNode(dest.x, dest.y)->addCreature(creature);
+	getChunk(dest.x, dest.y)->addCreature(creature);
 	return true;
 }
 
@@ -295,13 +295,13 @@ void Map::moveCreature(const std::shared_ptr<Creature>& creature, const std::sha
 	// remove the creature
 	oldTile->removeThing(creature, 0);
 
-	QTreeLeafNode* leaf = getQTNode(oldPos.x, oldPos.y);
-	QTreeLeafNode* new_leaf = getQTNode(newPos.x, newPos.y);
+	Chunk* chunk = getChunk(oldPos.x, oldPos.y);
+	Chunk* newChunk = getChunk(newPos.x, newPos.y);
 
 	// Switch the node ownership
-	if (leaf != new_leaf) {
-		leaf->removeCreature(creature);
-		new_leaf->addCreature(creature);
+	if (chunk != newChunk) {
+		chunk->removeCreature(creature);
+		newChunk->addCreature(creature);
 	}
 
 	// add the creature
@@ -985,17 +985,15 @@ uint16_t AStarNodes::getTileWalkCost(const std::shared_ptr<const Creature>& crea
 	return cost;
 }
 
-// QTreeLeafNode
-bool QTreeLeafNode::newLeaf = false;
-
-QTreeLeafNode::~QTreeLeafNode()
+// Chunk
+Chunk::~Chunk()
 {
 	for (auto* ptr : array) {
 		delete ptr;
 	}
 }
 
-Floor* QTreeLeafNode::createFloor(uint32_t z)
+Floor* Chunk::createFloor(uint32_t z)
 {
 	if (!array[z]) {
 		array[z] = new Floor();
