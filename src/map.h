@@ -261,6 +261,22 @@ public:
 		return QTreeNode::getLeafStatic<QTreeLeafNode*, QTreeNode*>(&root, x, y);
 	}
 
+	void setBounds(const uint16_t minX, const uint16_t maxX, const uint16_t minY, const uint16_t maxY)
+	{
+		assert(minX <= maxX);
+		assert(minY <= maxY);
+
+		baseX = minX;
+		baseY = minY;
+
+		const uint32_t actualWidth = maxX - minX + 1;
+		const uint32_t actualHeight = maxY - minY + 1;
+
+		sideLength = std::bit_ceil(std::max(actualWidth, actualHeight));
+	}
+
+	uint32_t getSideLength() const noexcept { return sideLength; }
+
 	Spawns spawns;
 	Towns towns;
 
@@ -272,6 +288,9 @@ private:
 
 	uint32_t width = 0;
 	uint32_t height = 0;
+	uint32_t sideLength = 0;
+	uint16_t baseX = 0;
+	uint16_t baseY = 0;
 
 private:
 	// Actually scans the map for spectators

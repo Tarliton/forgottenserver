@@ -131,7 +131,7 @@ std::shared_ptr<Tile> createTile(const std::shared_ptr<Item>& ground, const std:
 	return tile;
 }
 
-void parseTileArea(const OTB::Node& node, Map& map)
+void parseTileArea(const OTB::Node& node, std::vector<std::shared_ptr<Tile>>& tiles)
 {
 	auto first = node.propsBegin;
 	auto [base_x, base_y, z] = read_coords(first, node.propsEnd);
@@ -272,7 +272,7 @@ void parseTileArea(const OTB::Node& node, Map& map)
 
 		tile->setFlag(static_cast<tileflags_t>(tileflags));
 
-		map.setTile(x, y, z, tile);
+		tiles.push_back(tile);
 	}
 }
 
@@ -352,8 +352,7 @@ MapAttributes loadMap(Map& map, std::filesystem::path fileName)
 	if (minorVersionItems > Item::items.minorVersion) {
 		std::println("[Warning - IOMap::loadMap] This map needs an updated items.otb.");
 	}
-
-	std::println("> Map size: {:d}x{:d}.", width, height);
+	std::println("> Map declared size: {:d}x{:d}.", width, height);
 
 	const auto& rootNodes = loader.children();
 	if (rootNodes.size() != 1 || rootNodes.front().type != OTBM_MAP_DATA) {
@@ -373,10 +372,11 @@ MapAttributes loadMap(Map& map, std::filesystem::path fileName)
 		houses = fileName.stem().concat("-house.xml").string();
 	}
 
+	std::vector<std::shared_ptr<Tile>> tiles;
 	for (const auto& node : mapNode.children) {
 		switch (node.type) {
 			case OTBM_TILE_AREA:
-				parseTileArea(node, map);
+				parseTileArea(node, tiles);
 				break;
 
 			case OTBM_TOWNS:
@@ -397,8 +397,34 @@ MapAttributes loadMap(Map& map, std::filesystem::path fileName)
 		}
 	}
 
+	std::optional<uint16_t> minX, maxX, minY, maxY;
+	for (const auto& t : tiles) {
+		const auto pos = t->getPosition();
+		auto x = static_cast<uint16_t>(pos.getX());
+		auto y = static_cast<uint16_t>(pos.getY());
+
+		minX = minX ? std::min(*minX, x) : x;
+		maxX = maxX ? std::max(*maxX, x) : x;
+
+		minY = minY ? std::min(*minY, y) : y;
+		maxY = maxY ? std::max(*maxY, y) : y;
+	}
+
+	if (!minX || !maxX || !minY || !maxY) {
+		throw std::runtime_error(
+			std::format("[{:s}:{:d} - {:s}] Could not calculate map bounds", __FILE__, __LINE__, __FUNCTION__));
+	}
+
+	map.setBounds(minX.value(), maxX.value(), minY.value(), maxY.value());
+
+	for (const auto& t : tiles) {
+		const auto pos = t->getPosition();
+		map.setTile(pos.getX(), pos.getY(), pos.getZ(), t);
+	}
+
 	auto end = std::chrono::steady_clock::now();
 
+	std::println("> Map calculated size: {:d}x{:d}.", map.getSideLength(), map.getSideLength());
 	std::println("> Map loading time: {}ms.", duration_cast<std::chrono::milliseconds>(end - start).count());
 
 	return {
