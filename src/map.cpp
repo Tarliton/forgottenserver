@@ -110,78 +110,45 @@ bool Map::save()
 
 std::shared_ptr<Tile> Map::getTile(uint16_t x, uint16_t y, uint8_t z) const
 {
-	if (z >= MAP_MAX_LAYERS) {
+	x -= baseX;
+	y -= baseY;
+
+	if (static_cast<uint32_t>(x) >= sideLength || static_cast<uint32_t>(y) >= sideLength || z >= MAP_MAX_LAYERS) {
 		return nullptr;
 	}
 
-	const QTreeLeafNode* leaf = QTreeNode::getLeafStatic<const QTreeLeafNode*, const QTreeNode*>(&root, x, y);
-	if (!leaf) {
+	const auto chunkID = calculateChunkID(x, y);
+	const auto it = chunks.find(chunkID);
+	if (it == chunks.end()) {
 		return nullptr;
 	}
 
-	const Floor* floor = leaf->getFloor(z);
+	const auto floor = it->second->getFloor(z);
 	if (!floor) {
 		return nullptr;
 	}
-	return floor->tiles[x & FLOOR_MASK][y & FLOOR_MASK];
+
+	return floor->tiles[y & FLOOR_MASK][x & FLOOR_MASK];
 }
 
 void Map::setTile(uint16_t x, uint16_t y, uint8_t z, const std::shared_ptr<Tile>& newTile)
 {
-	if (z >= MAP_MAX_LAYERS) {
+	x -= baseX;
+	y -= baseY;
+
+	if (static_cast<uint32_t>(x) >= sideLength || static_cast<uint32_t>(y) >= sideLength || z >= MAP_MAX_LAYERS) {
 		std::cout << "ERROR: Attempt to set tile on invalid coordinate " << Position(x, y, z) << "!" << std::endl;
 		return;
 	}
 
-	QTreeLeafNode::newLeaf = false;
-	QTreeLeafNode* leaf = root.createLeaf(x, y, 15);
-
-	if (QTreeLeafNode::newLeaf) {
-		// update north
-		QTreeLeafNode* northLeaf = root.getLeaf(x, y - FLOOR_SIZE);
-		if (northLeaf) {
-			northLeaf->leafS = leaf;
-		}
-
-		// update west leaf
-		QTreeLeafNode* westLeaf = root.getLeaf(x - FLOOR_SIZE, y);
-		if (westLeaf) {
-			westLeaf->leafE = leaf;
-		}
-
-		// update south
-		QTreeLeafNode* southLeaf = root.getLeaf(x, y + FLOOR_SIZE);
-		if (southLeaf) {
-			leaf->leafS = southLeaf;
-		}
-
-		// update east
-		QTreeLeafNode* eastLeaf = root.getLeaf(x + FLOOR_SIZE, y);
-		if (eastLeaf) {
-			leaf->leafE = eastLeaf;
-		}
-	}
-
-	Floor* floor = leaf->createFloor(z);
-	uint32_t offsetX = x & FLOOR_MASK;
-	uint32_t offsetY = y & FLOOR_MASK;
-
-	auto& tile = floor->tiles[offsetX][offsetY];
-	if (tile) {
-		TileItemVector* items = newTile->getItemList();
-		if (items) {
-			for (auto it = items->rbegin(), end = items->rend(); it != end; ++it) {
-				tile->addThing(*it);
-			}
-			items->clear();
-		}
-
-		if (const auto& ground = newTile->getGround()) {
-			tile->addThing(ground);
-			newTile->setGround(nullptr);
-		}
+	auto chunkID = calculateChunkID(x, y);
+	chunks.emplace(chunkID, std::make_unique<QTreeLeafNode>());
+	const auto floor = chunks[chunkID]->createFloor(z);
+	auto& tile = floor->tiles[y & FLOOR_MASK][x & FLOOR_MASK];
+	if (!tile) {
+		floor->tiles[y & FLOOR_MASK][x & FLOOR_MASK] = newTile;
 	} else {
-		tile = newTile;
+		std::cout << "Error: Map::setTile() already exists." << Position(x, y, z) << "!" << std::endl;
 	}
 }
 
@@ -191,12 +158,16 @@ void Map::removeTile(uint16_t x, uint16_t y, uint8_t z)
 		return;
 	}
 
-	const QTreeLeafNode* leaf = QTreeNode::getLeafStatic<const QTreeLeafNode*, const QTreeNode*>(&root, x, y);
-	if (!leaf) {
+	x -= baseX;
+	y -= baseY;
+
+	auto chunkID = calculateChunkID(x, y);
+	const auto chunkIt = chunks.find(chunkID);
+	if (chunkIt == chunks.end()) {
 		return;
 	}
 
-	const Floor* floor = leaf->getFloor(z);
+	const auto floor = chunkIt->second->getFloor(z);
 	if (!floor) {
 		return;
 	}
@@ -213,8 +184,8 @@ void Map::removeTile(uint16_t x, uint16_t y, uint8_t z)
 		}
 
 		if (TileItemVector* items = tile->getItemList()) {
-			for (auto it = items->begin(), end = items->end(); it != end; ++it) {
-				g_game.internalRemoveItem(*it);
+			for (auto& item : *items) {
+				g_game.internalRemoveItem(item);
 			}
 		}
 
@@ -372,14 +343,36 @@ void Map::moveCreature(const std::shared_ptr<Creature>& creature, const std::sha
 	newTile->postAddNotification(creature, oldTile, 0);
 }
 
+std::vector<uint32_t> chunksInRect(uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1)
+{
+	if (x0 > x1) std::swap(x0, x1);
+	if (y0 > y1) std::swap(y0, y1);
+
+	const uint32_t rx0 = (x0 / FLOOR_SIZE) * FLOOR_SIZE;
+	const uint32_t ry0 = (y0 / FLOOR_SIZE) * FLOOR_SIZE;
+	const uint32_t rx1 = (x1 / FLOOR_SIZE) * FLOOR_SIZE;
+	const uint32_t ry1 = (y1 / FLOOR_SIZE) * FLOOR_SIZE;
+
+	std::vector<uint32_t> region_ids;
+	region_ids.reserve(((rx1 - rx0) / FLOOR_SIZE + 1) * ((ry1 - ry0) / FLOOR_SIZE + 1));
+
+	for (uint32_t y = ry0; y <= ry1; y += FLOOR_SIZE) {
+		for (uint32_t x = rx0; x <= rx1; x += FLOOR_SIZE) {
+			region_ids.push_back(calculateChunkID(x, y));
+		}
+	}
+
+	return region_ids;
+}
+
 void Map::getSpectatorsInternal(SpectatorVec& spectators, const Position& centerPos, int32_t minRangeX,
                                 int32_t maxRangeX, int32_t minRangeY, int32_t maxRangeY, int32_t minRangeZ,
                                 int32_t maxRangeZ, bool onlyPlayers) const
 {
-	auto min_y = centerPos.y + minRangeY;
-	auto min_x = centerPos.x + minRangeX;
-	auto max_y = centerPos.y + maxRangeY;
-	auto max_x = centerPos.x + maxRangeX;
+	auto min_y = centerPos.y - baseY + minRangeY;
+	auto min_x = centerPos.x - baseX + minRangeX;
+	auto max_y = centerPos.y - baseY + maxRangeY;
+	auto max_x = centerPos.x - baseX + maxRangeX;
 
 	int32_t minoffset = centerPos.getZ() - maxRangeZ;
 	uint16_t x1 = std::min<uint32_t>(0xFFFF, std::max<int32_t>(0, (min_x + minoffset)));
@@ -389,46 +382,28 @@ void Map::getSpectatorsInternal(SpectatorVec& spectators, const Position& center
 	uint16_t x2 = std::min<uint32_t>(0xFFFF, std::max<int32_t>(0, (max_x + maxoffset)));
 	uint16_t y2 = std::min<uint32_t>(0xFFFF, std::max<int32_t>(0, (max_y + maxoffset)));
 
-	int32_t startx1 = x1 - (x1 % FLOOR_SIZE);
-	int32_t starty1 = y1 - (y1 % FLOOR_SIZE);
-	int32_t endx2 = x2 - (x2 % FLOOR_SIZE);
-	int32_t endy2 = y2 - (y2 % FLOOR_SIZE);
-
-	const QTreeLeafNode* startLeaf =
-	    QTreeNode::getLeafStatic<const QTreeLeafNode*, const QTreeNode*>(&root, startx1, starty1);
-	const QTreeLeafNode* leafS = startLeaf;
-	const QTreeLeafNode* leafE;
-
-	for (int_fast32_t ny = starty1; ny <= endy2; ny += FLOOR_SIZE) {
-		leafE = leafS;
-		for (int_fast32_t nx = startx1; nx <= endx2; nx += FLOOR_SIZE) {
-			if (leafE) {
-				for (auto&& creature : leafE->creatures | std::views::filter([onlyPlayers](const auto& creature) {
-					                       return !onlyPlayers || creature->asPlayer() != nullptr;
-				                       })) {
-					const Position& cpos = creature->getPosition();
-					if (minRangeZ > cpos.z || maxRangeZ < cpos.z) {
-						continue;
-					}
-
-					int16_t offsetZ = centerPos.getOffsetZ(cpos);
-					if ((min_y + offsetZ) > cpos.y || (max_y + offsetZ) < cpos.y || (min_x + offsetZ) > cpos.x ||
-					    (max_x + offsetZ) < cpos.x) {
-						continue;
-					}
-
-					spectators.emplace(creature);
-				}
-				leafE = leafE->leafE;
-			} else {
-				leafE = QTreeNode::getLeafStatic<const QTreeLeafNode*, const QTreeNode*>(&root, nx + FLOOR_SIZE, ny);
-			}
+	auto region_ids = chunksInRect(x1, y1, x2, y2);
+	for (const auto& region_id : region_ids) {
+		const auto it = chunks.find(region_id);
+		if (it == chunks.end()) {
+			continue;
 		}
 
-		if (leafS) {
-			leafS = leafS->leafS;
-		} else {
-			leafS = QTreeNode::getLeafStatic<const QTreeLeafNode*, const QTreeNode*>(&root, startx1, ny + FLOOR_SIZE);
+		for (auto&& creature : it->second->creatures | std::views::filter([onlyPlayers](const auto& creature) {
+			                       return !onlyPlayers || creature->asPlayer() != nullptr;
+		                       })) {
+			const Position& cpos = creature->getPosition();
+			if (minRangeZ > cpos.z || maxRangeZ < cpos.z) {
+				continue;
+			}
+
+			int16_t offsetZ = centerPos.getOffsetZ(cpos);
+			if ((min_y + offsetZ) > cpos.y || (max_y + offsetZ) < cpos.y || (min_x + offsetZ) > cpos.x ||
+			    (max_x + offsetZ) < cpos.x) {
+				continue;
+			}
+
+			spectators.emplace(creature);
 		}
 	}
 }

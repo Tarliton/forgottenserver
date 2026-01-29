@@ -8,6 +8,7 @@
 #include "position.h"
 #include "spawn.h"
 #include "town.h"
+#include <flat_map>
 
 class Creature;
 class Tile;
@@ -154,6 +155,25 @@ private:
  * Holds all the actual map-data
  */
 
+constexpr uint32_t partition(uint32_t n) {
+	n &= 0xFFFF;
+	n = (n ^ (n << 8)) & 0x00FF00FF;
+	n = (n ^ (n << 4)) & 0x0F0F0F0F;
+	n = (n ^ (n << 2)) & 0x33333333;
+	return (n ^ (n << 1)) & 0x55555555;
+}
+
+constexpr uint32_t morton2(uint32_t x, uint32_t y) {
+	x &= 0xFFFF;
+	y &= 0xFFFF;
+	return partition(x) | (partition(y) << 1);
+}
+
+inline uint32_t calculateChunkID(const uint32_t x, const uint32_t y)
+{
+	return morton2(x/FLOOR_SIZE, y/FLOOR_SIZE);
+}
+
 class Map
 {
 public:
@@ -258,7 +278,12 @@ public:
 
 	QTreeLeafNode* getQTNode(uint16_t x, uint16_t y)
 	{
-		return QTreeNode::getLeafStatic<QTreeLeafNode*, QTreeNode*>(&root, x, y);
+		const auto it = chunks.find(calculateChunkID(x,y));
+		if (it == chunks.end()) {
+			return nullptr;
+		}
+
+		return it->second.get();
 	}
 
 	void setBounds(const uint16_t minX, const uint16_t maxX, const uint16_t minY, const uint16_t maxY)
@@ -284,7 +309,7 @@ private:
 	SpectatorCache spectatorCache;
 	SpectatorCache playersSpectatorCache;
 
-	QTreeNode root;
+	std::flat_map<uint32_t, std::unique_ptr<QTreeLeafNode>> chunks;
 
 	uint32_t width = 0;
 	uint32_t height = 0;
