@@ -77,54 +77,12 @@ struct Floor
 };
 
 class FrozenPathingConditionCall;
-class QTreeLeafNode;
 
-class QTreeNode
-{
-public:
-	constexpr QTreeNode() = default;
-	virtual ~QTreeNode();
-
-	// non-copyable
-	QTreeNode(const QTreeNode&) = delete;
-	QTreeNode& operator=(const QTreeNode&) = delete;
-
-	bool isLeaf() const { return leaf; }
-
-	QTreeLeafNode* getLeaf(uint32_t x, uint32_t y);
-
-	template <typename Leaf, typename Node>
-	static Leaf getLeafStatic(Node node, uint32_t x, uint32_t y)
-	{
-		do {
-			node = node->child[((x & 0x8000) >> 15) | ((y & 0x8000) >> 14)];
-			if (!node) {
-				return nullptr;
-			}
-
-			x <<= 1;
-			y <<= 1;
-		} while (!node->leaf);
-		return static_cast<Leaf>(node);
-	}
-
-	QTreeLeafNode* createLeaf(uint32_t x, uint32_t y, uint32_t level);
-
-protected:
-	bool leaf = false;
-
-private:
-	QTreeNode* child[4] = {};
-
-	friend class Map;
-};
-
-class QTreeLeafNode final : public QTreeNode
+class QTreeLeafNode final
 {
 public:
 	QTreeLeafNode()
 	{
-		leaf = true;
 		newLeaf = true;
 	}
 	~QTreeLeafNode();
