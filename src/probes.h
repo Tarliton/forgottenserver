@@ -7,6 +7,16 @@
 
 #else
 
+#define ATLAS_TASK_ENQUEUE_ENABLED() 0
+#define ATLAS_TASK_ENQUEUE(arg1) \
+	do { \
+	} while (0)
+
+#define ATLAS_TASK_DEQUEUE_ENABLED() 0
+#define ATLAS_TASK_DEQUEUE(arg1) \
+	do { \
+	} while (0)
+
 #endif
 
 #endif

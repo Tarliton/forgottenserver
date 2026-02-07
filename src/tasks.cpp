@@ -7,6 +7,7 @@
 
 #include "enums.h"
 #include "game.h"
+#include "probes.h"
 
 extern Game g_game;
 
@@ -30,6 +31,7 @@ void Dispatcher::threadMain()
 			taskSignal.wait(taskLockUnique);
 		}
 		tmpTaskList.swap(taskList);
+		if (ATLAS_TASK_DEQUEUE_ENABLED()) ATLAS_TASK_DEQUEUE(taskList.size());
 		taskLockUnique.unlock();
 
 		for (auto& task : tmpTaskList) {
@@ -52,6 +54,7 @@ void Dispatcher::addTask(Task_ptr&& task)
 	if (getState() == THREAD_STATE_RUNNING) {
 		do_signal = taskList.empty();
 		taskList.push_back(std::move(task));
+		if (ATLAS_TASK_ENQUEUE_ENABLED()) ATLAS_TASK_ENQUEUE(taskList.size());
 	}
 
 	taskLock.unlock();
@@ -71,6 +74,7 @@ void Dispatcher::shutdown()
 
 	std::lock_guard<std::mutex> lockClass(taskLock);
 	taskList.push_back(std::move(task));
+	if (ATLAS_TASK_ENQUEUE_ENABLED()) ATLAS_TASK_ENQUEUE(taskList.size());
 
 	taskSignal.notify_one();
 }
