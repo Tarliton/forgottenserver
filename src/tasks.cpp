@@ -13,9 +13,21 @@ extern Game g_game;
 
 Dispatcher g_dispatcher;
 
-Task_ptr createTask(TaskFunc&& f) { return std::make_unique<Task>(std::move(f)); }
+Task_ptr createTask(TaskFunc&& f, const std::source_location loc)
+{
+	auto task = std::make_unique<Task>(std::move(f));
+	if (ATLAS_TASK_EXECUTION_START_ENABLED()) task->setSourceLocation(loc);
 
-Task_ptr createTask(uint32_t expiration, TaskFunc&& f) { return std::make_unique<Task>(expiration, std::move(f)); }
+	return task;
+}
+
+Task_ptr createTask(uint32_t expiration, TaskFunc&& f, const std::source_location loc)
+{
+	auto task = std::make_unique<Task>(expiration, std::move(f));
+	if (ATLAS_TASK_EXECUTION_START_ENABLED()) task->setSourceLocation(loc);
+
+	return task;
+}
 
 void Dispatcher::threadMain()
 {

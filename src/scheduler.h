@@ -26,10 +26,11 @@ private:
 	uint32_t eventId = 0;
 	uint32_t delay = 0;
 
-	friend SchedulerTask_ptr createSchedulerTask(uint32_t, TaskFunc&&);
+	friend SchedulerTask_ptr createSchedulerTask(uint32_t, TaskFunc&&, std::source_location);
 };
 
-SchedulerTask_ptr createSchedulerTask(uint32_t delay, TaskFunc&& f);
+SchedulerTask_ptr createSchedulerTask(uint32_t delay, TaskFunc&& f,
+                                      std::source_location loc = std::source_location::current());
 
 class Scheduler : public ThreadHolder<Scheduler>
 {

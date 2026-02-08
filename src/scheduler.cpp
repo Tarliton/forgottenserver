@@ -67,7 +67,9 @@ void Scheduler::shutdown()
 	});
 }
 
-SchedulerTask_ptr createSchedulerTask(uint32_t delay, TaskFunc&& f)
+SchedulerTask_ptr createSchedulerTask(uint32_t delay, TaskFunc&& f, const std::source_location loc)
 {
-	return SchedulerTask_ptr(new SchedulerTask(delay, std::move(f)));
+	auto task = SchedulerTask_ptr(new SchedulerTask(delay, std::move(f)));
+	if (ATLAS_TASK_EXECUTION_START_ENABLED()) task->setSourceLocation(loc);
+	return task;
 }

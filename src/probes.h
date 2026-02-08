@@ -17,6 +17,16 @@
 	do { \
 	} while (0)
 
+#define ATLAS_TASK_EXECUTION_START_ENABLED() 0
+#define ATLAS_TASK_EXECUTION_START(arg1, arg2, arg3) \
+	do { \
+	} while (0)
+
+#define ATLAS_TASK_EXECUTION_END_ENABLED() 0
+#define ATLAS_TASK_EXECUTION_END(arg1, arg2, arg3) \
+	do { \
+	} while (0)
+
 #endif
 
 #endif
