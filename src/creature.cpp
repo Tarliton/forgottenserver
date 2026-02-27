@@ -1193,16 +1193,6 @@ int64_t Creature::getStepDuration() const
 		return 0;
 	}
 
-	int32_t stepSpeed = getStepSpeed();
-	uint32_t calculatedStepSpeed = 1;
-	if (stepSpeed > -Creature::speedB) {
-		calculatedStepSpeed =
-		    floor((Creature::speedA * log((stepSpeed / 2) + Creature::speedB) + Creature::speedC) + 0.5);
-		if (calculatedStepSpeed == 0) {
-			calculatedStepSpeed = 1;
-		}
-	}
-
 	uint32_t groundSpeed = 150;
 	if (const auto& tile = getTile()) {
 		if (const auto& ground = tile->getGround()) {
@@ -1213,11 +1203,17 @@ int64_t Creature::getStepDuration() const
 		}
 	}
 
-	double duration = std::floor(1000 * groundSpeed / calculatedStepSpeed);
-	int64_t stepDuration = std::ceil(duration / 50) * 50;
+	uint16_t stepDuration = 850;
+	const int32_t stepSpeed = getStepSpeed();
+	for (const auto& bp : Item::items.groundTables[Item::items.groundToIndex[groundSpeed]]) {
+		if (stepSpeed >= bp.minSpeed)
+			stepDuration = bp.duration;
+		else
+			break;
+	}
 
-	const auto& monster = this->asMonster();
-	if (monster && monster->isTargetNearby() && !monster->isFleeing() && !monster->getMaster()) {
+	if (const auto& monster = this->asMonster();
+	    monster && monster->isTargetNearby() && !monster->isFleeing() && !monster->getMaster()) {
 		stepDuration *= 2;
 	}
 

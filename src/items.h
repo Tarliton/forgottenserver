@@ -410,6 +410,12 @@ public:
 	bool showClientDuration = false;
 };
 
+struct Breakpoint
+{
+	uint16_t minSpeed;
+	uint16_t duration;
+};
+
 class Items
 {
 public:
@@ -449,6 +455,9 @@ public:
 
 	NameMap nameToItems;
 	CurrencyMap currencyItems;
+
+	std::vector<std::vector<Breakpoint>> groundTables;
+	std::unordered_map<uint16_t, size_t> groundToIndex;
 
 private:
 	std::vector<ItemType> items;

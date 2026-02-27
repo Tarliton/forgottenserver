@@ -354,6 +354,26 @@ bool Items::reload()
 	return true;
 }
 
+static constexpr uint16_t DURATIONS[17] = {50,  100, 150, 200, 250, 300, 350, 400, 450,
+                                           500, 550, 600, 650, 700, 750, 800, 850};
+
+std::vector<Breakpoint> buildBreakpointsForGround(const uint16_t ground)
+{
+	std::vector<Breakpoint> thresholds;
+	thresholds.reserve(17);
+
+	for (uint16_t duration : DURATIONS) {
+		double target = 1000 * ground / static_cast<double>(duration);
+		double speed = 2.0 * (std::exp((target - Creature::speedC) / Creature::speedA) - Creature::speedB);
+
+		thresholds.push_back({static_cast<uint16_t>(std::ceil(speed)), duration});
+	}
+
+	std::ranges::sort(thresholds, [](const Breakpoint& a, const Breakpoint& b) { return a.minSpeed < b.minSpeed; });
+
+	return thresholds;
+}
+
 bool Items::loadFromOtb(const std::string& file)
 {
 	auto loader = OTB::load(file, "OTBI");
@@ -391,6 +411,7 @@ bool Items::loadFromOtb(const std::string& file)
 		return false;
 	}
 
+	std::vector<uint16_t> uniqueGroundSpeeds;
 	for (auto& itemNode : loader.children()) {
 		auto it = itemNode.propsBegin;
 		auto flags = OTB::read<uint32_t>(it, itemNode.propsEnd);
@@ -558,9 +579,31 @@ bool Items::loadFromOtb(const std::string& file)
 		iType.wareId = wareId;
 		iType.classification = classification;
 		iType.alwaysOnTopOrder = alwaysOnTopOrder;
+
+		if (iType.group == ITEM_GROUP_GROUND && !iType.blockSolid) {
+			uniqueGroundSpeeds.push_back(speed);
+		}
 	}
 
 	items.shrink_to_fit();
+
+	std::ranges::sort(uniqueGroundSpeeds);
+	uniqueGroundSpeeds.erase(std::ranges::unique(uniqueGroundSpeeds).begin(), uniqueGroundSpeeds.end());
+
+	for (const unsigned short uniqueGroundSpeed : uniqueGroundSpeeds) {
+		std::cout << uniqueGroundSpeed << std::endl;
+	}
+
+	groundTables.reserve(uniqueGroundSpeeds.size());
+
+	for (const uint16_t ground : uniqueGroundSpeeds) {
+		groundTables.push_back(buildBreakpointsForGround(ground));
+	}
+
+	for (size_t i = 0; i < uniqueGroundSpeeds.size(); ++i) {
+		groundToIndex[uniqueGroundSpeeds[i]] = i;
+	}
+
 	return true;
 }
 
