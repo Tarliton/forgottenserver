@@ -24,17 +24,12 @@ public:
 	};
 	static const char* protocol_name() { return "status protocol"; }
 
-	explicit ProtocolStatus(Connection_ptr connection) : Protocol(connection) {}
+	explicit ProtocolStatus(std::shared_ptr<Connection> connection) : Protocol(std::move(connection)) {}
 
 	void onRecvFirstMessage(NetworkMessage& msg) override;
 
 	void sendStatusString();
 	void sendInfo(uint16_t requestedInfo, const std::string& characterName);
-
-	static const uint64_t start;
-
-private:
-	static std::map<Connection::Address, int64_t> ipConnectMap;
 };
 
 #endif // FS_PROTOCOLSTATUS_H

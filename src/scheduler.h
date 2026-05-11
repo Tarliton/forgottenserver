@@ -7,34 +7,31 @@
 #include "tasks.h"
 #include "thread_holder_base.h"
 
-static constexpr int32_t SCHEDULER_MINTICKS = 50;
-
-class SchedulerTask;
-using SchedulerTask_ptr = std::unique_ptr<SchedulerTask>;
+inline constexpr auto SCHEDULER_MINTICKS = 50ms;
 
 class SchedulerTask : public Task
 {
 public:
+	SchedulerTask(std::chrono::milliseconds delay, TaskFunc&& f) : Task(std::move(f)), delay(delay) {}
+
 	void setEventId(uint32_t id) { eventId = id; }
 	uint32_t getEventId() const { return eventId; }
 
-	uint32_t getDelay() const { return delay; }
+	auto getDelay() const { return delay; }
 
 private:
-	SchedulerTask(uint32_t delay, TaskFunc&& f) : Task(std::move(f)), delay(delay) {}
-
 	uint32_t eventId = 0;
-	uint32_t delay = 0;
+	std::chrono::milliseconds delay = std::chrono::milliseconds::zero();
 
-	friend SchedulerTask_ptr createSchedulerTask(uint32_t, TaskFunc&&);
+	friend std::unique_ptr<SchedulerTask> createSchedulerTask(std::chrono::milliseconds, TaskFunc&&);
 };
 
-SchedulerTask_ptr createSchedulerTask(uint32_t delay, TaskFunc&& f);
+std::unique_ptr<SchedulerTask> createSchedulerTask(std::chrono::milliseconds delay, TaskFunc&& f);
 
 class Scheduler : public ThreadHolder<Scheduler>
 {
 public:
-	uint32_t addEvent(SchedulerTask_ptr&& task);
+	uint32_t addEvent(std::unique_ptr<SchedulerTask>&& task);
 	void stopEvent(uint32_t eventId);
 
 	void shutdown();

@@ -121,7 +121,6 @@ struct PlayerHandlers
 	int32_t onMoveCreature = -1;
 	int32_t onReportRuleViolation = -1;
 	int32_t onRotateItem = -1;
-	int32_t onTurn = -1;
 	int32_t onTradeRequest = -1;
 	int32_t onTradeAccept = -1;
 	int32_t onTradeCompleted = -1;
@@ -165,7 +164,6 @@ void load_player_from_scripts()
 	playerHandlers.onMoveCreature = scriptInterface.getMetaEvent("Player", "onMoveCreature");
 	playerHandlers.onReportRuleViolation = scriptInterface.getMetaEvent("Player", "onReportRuleViolation");
 	playerHandlers.onRotateItem = scriptInterface.getMetaEvent("Player", "onRotateItem");
-	playerHandlers.onTurn = scriptInterface.getMetaEvent("Player", "onTurn");
 	playerHandlers.onTradeRequest = scriptInterface.getMetaEvent("Player", "onTradeRequest");
 	playerHandlers.onTradeAccept = scriptInterface.getMetaEvent("Player", "onTradeAccept");
 	playerHandlers.onTradeCompleted = scriptInterface.getMetaEvent("Player", "onTradeCompleted");
@@ -601,7 +599,7 @@ void onChangeMana(const std::shared_ptr<Creature>& creature, const std::shared_p
 	tfs::lua::resetScriptEnv();
 }
 
-void onThink(const std::shared_ptr<Creature>& creature, uint32_t interval)
+void onThink(const std::shared_ptr<Creature>& creature, std::chrono::milliseconds interval)
 {
 	// Creature:onThink(interval)
 	if (creatureHandlers.onThink == -1) {
@@ -620,7 +618,7 @@ void onThink(const std::shared_ptr<Creature>& creature, uint32_t interval)
 	scriptInterface.pushFunction(creatureHandlers.onThink);
 
 	tfs::lua::pushThing(L, creature);
-	tfs::lua::pushNumber(L, interval);
+	tfs::lua::pushNumber(L, interval.count());
 	scriptInterface.callVoidFunction(2);
 }
 
@@ -1187,29 +1185,6 @@ void onRotateItem(const std::shared_ptr<Player>& player, const std::shared_ptr<I
 	scriptInterface.callVoidFunction(2);
 }
 
-bool onTurn(const std::shared_ptr<Player>& player, Direction direction)
-{
-	// Player:onTurn(direction)
-	if (playerHandlers.onTurn == -1) {
-		return true;
-	}
-
-	if (!tfs::lua::reserveScriptEnv()) {
-		std::cout << "[Error - tfs::events::player::onTurn] Call stack overflow" << std::endl;
-		return false;
-	}
-
-	const auto env = tfs::lua::getScriptEnv();
-	env->setScriptId(playerHandlers.onTurn, &scriptInterface);
-
-	const auto L = scriptInterface.getLuaState();
-	scriptInterface.pushFunction(playerHandlers.onTurn);
-
-	tfs::lua::pushThing(L, player);
-	tfs::lua::pushNumber(L, direction);
-	return scriptInterface.callFunction(2);
-}
-
 bool onTradeRequest(const std::shared_ptr<Player>& player, const std::shared_ptr<Player>& target,
                     const std::shared_ptr<Item>& item)
 {
@@ -1492,7 +1467,7 @@ void onInventoryUpdate(const std::shared_ptr<Player>& player, const std::shared_
 	scriptInterface.callVoidFunction(4);
 }
 
-void onNetworkMessage(const std::shared_ptr<Player>& player, uint8_t recvByte, NetworkMessage_ptr& msg)
+void onNetworkMessage(const std::shared_ptr<Player>& player, uint8_t recvByte, std::unique_ptr<NetworkMessage> msg)
 {
 	// Player:onNetworkMessage(recvByte, msg)
 	if (playerHandlers.onNetworkMessage == -1) {

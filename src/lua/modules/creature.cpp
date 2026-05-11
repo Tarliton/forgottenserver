@@ -232,13 +232,8 @@ int luaCreatureSetTarget(lua_State* L)
 		return 1;
 	}
 
-	if (const auto& target = tfs::lua::getCreature(L, 2)) {
-		creature->setAttackedCreature(target);
-		tfs::lua::pushBoolean(L, creature->canAttackCreature(target));
-	} else {
-		creature->removeAttackedCreature();
-		tfs::lua::pushBoolean(L, true);
-	}
+	creature->setAttackedCreature(tfs::lua::getCreature(L, 2));
+	tfs::lua::pushBoolean(L, true);
 	return 1;
 }
 
@@ -269,13 +264,8 @@ int luaCreatureSetFollowCreature(lua_State* L)
 		return 1;
 	}
 
-	if (const auto& followedCreature = tfs::lua::getCreature(L, 2)) {
-		creature->setFollowCreature(followedCreature);
-		tfs::lua::pushBoolean(L, creature->canFollowCreature(followedCreature));
-	} else {
-		creature->removeFollowCreature();
-		tfs::lua::pushBoolean(L, true);
-	}
+	creature->setFollowCreature(tfs::lua::getCreature(L, 2));
+	tfs::lua::pushBoolean(L, true);
 	return 1;
 }
 
@@ -844,7 +834,8 @@ int luaCreatureGetDamageMap(lua_State* L)
 	for (auto&& [id, cb] : damageMap) {
 		lua_createtable(L, 0, 2);
 		tfs::lua::setField(L, "total", cb.total);
-		tfs::lua::setField(L, "ticks", cb.ticks);
+		const auto wallTicks = std::chrono::system_clock::now() - (std::chrono::steady_clock::now() - cb.ticks);
+		tfs::lua::setField(L, "ticks", duration_cast<std::chrono::milliseconds>(wallTicks.time_since_epoch()).count());
 		lua_rawseti(L, -2, id);
 	}
 	return 1;

@@ -454,12 +454,11 @@ void Map::getSpectators(SpectatorVec& spectators, const Position& centerPos, boo
 		if (onlyPlayers) {
 			auto it = playersSpectatorCache.find(centerPos);
 			if (it != playersSpectatorCache.end()) {
-				if (!spectators.empty()) {
-					spectators.insert(it->second.begin(), it->second.end());
-				} else {
+				if (spectators.empty()) {
 					spectators = it->second;
+				} else {
+					spectators.insert(it->second.begin(), it->second.end());
 				}
-
 				foundCache = true;
 			}
 		}
@@ -468,13 +467,13 @@ void Map::getSpectators(SpectatorVec& spectators, const Position& centerPos, boo
 			auto it = spectatorCache.find(centerPos);
 			if (it != spectatorCache.end()) {
 				if (!onlyPlayers) {
-					if (!spectators.empty()) {
-						const SpectatorVec& cachedSpectators = it->second;
-						spectators.insert(cachedSpectators.begin(), cachedSpectators.end());
-					} else {
+					if (spectators.empty()) {
 						spectators = it->second;
+					} else {
+						spectators.insert(it->second.begin(), it->second.end());
 					}
 				} else {
+					// Filter players from cached spectators
 					const SpectatorVec& cachedSpectators = it->second;
 					for (const auto& spectator : cachedSpectators) {
 						if (spectator->asPlayer()) {
@@ -482,7 +481,6 @@ void Map::getSpectators(SpectatorVec& spectators, const Position& centerPos, boo
 						}
 					}
 				}
-
 				foundCache = true;
 			} else {
 				cacheResult = true;
@@ -1068,7 +1066,7 @@ Floor* QTreeLeafNode::createFloor(uint32_t z)
 
 uint32_t Map::clean() const
 {
-	uint64_t start = OTSYS_TIME();
+	auto start = std::chrono::steady_clock::now();
 	size_t tiles = 0;
 
 	if (g_game.getGameState() == GAME_STATE_NORMAL) {
@@ -1101,6 +1099,7 @@ uint32_t Map::clean() const
 	}
 
 	std::cout << "> CLEAN: Removed " << count << " item" << (count != 1 ? "s" : "") << " from " << tiles << " tile"
-	          << (tiles != 1 ? "s" : "") << " in " << (OTSYS_TIME() - start) / (1000.) << " seconds." << std::endl;
+	          << (tiles != 1 ? "s" : "") << " in "
+	          << duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start) << "." << std::endl;
 	return count;
 }

@@ -107,7 +107,7 @@ void Spells::clear(bool fromLua)
 
 LuaScriptInterface& Spells::getScriptInterface() { return scriptInterface; }
 
-Event_ptr Spells::getEvent(const std::string& nodeName)
+std::unique_ptr<Event> Spells::getEvent(const std::string& nodeName)
 {
 	if (boost::iequals(nodeName, "rune")) {
 		return std::make_unique<RuneSpell>(&scriptInterface);
@@ -117,10 +117,15 @@ Event_ptr Spells::getEvent(const std::string& nodeName)
 	return nullptr;
 }
 
-bool Spells::registerEvent(Event_ptr event, const pugi::xml_node&)
+bool Spells::registerEvent(std::unique_ptr<Event> event, const pugi::xml_node&)
 {
-	InstantSpell* instant = dynamic_cast<InstantSpell*>(event.get());
-	if (instant) {
+	Spell* spell = dynamic_cast<Spell*>(event.get());
+	if (!spell) {
+		return false;
+	}
+
+	if (InstantSpell* instantPtr = spell->getInstantSpell()) {
+		std::unique_ptr<InstantSpell> instant{instantPtr};
 		auto result = instants.emplace(instant->getWords(), std::move(*instant));
 		if (!result.second) {
 			std::cout << "[Warning - Spells::registerEvent] Duplicate registered instant spell with words: "
@@ -129,8 +134,8 @@ bool Spells::registerEvent(Event_ptr event, const pugi::xml_node&)
 		return result.second;
 	}
 
-	RuneSpell* rune = dynamic_cast<RuneSpell*>(event.get());
-	if (rune) {
+	if (RuneSpell* runePtr = spell->getRuneSpell()) {
+		std::unique_ptr<RuneSpell> rune{runePtr};
 		auto result = runes.emplace(rune->getRuneItemId(), std::move(*rune));
 		if (!result.second) {
 			std::cout << "[Warning - Spells::registerEvent] Duplicate registered rune with id: "
@@ -142,36 +147,35 @@ bool Spells::registerEvent(Event_ptr event, const pugi::xml_node&)
 	return false;
 }
 
-bool Spells::registerInstantLuaEvent(InstantSpell* event)
+bool Spells::registerInstantLuaEvent(std::unique_ptr<InstantSpell> instant)
 {
-	InstantSpell_ptr instant{event};
-	if (instant) {
-		std::string words = instant->getWords();
-		auto result = instants.emplace(instant->getWords(), std::move(*instant));
-		if (!result.second) {
-			std::cout << "[Warning - Spells::registerInstantLuaEvent] Duplicate registered instant spell with words: "
-			          << words << std::endl;
-		}
-		return result.second;
+	if (!instant) {
+		return false;
 	}
 
-	return false;
+	const auto words = instant->getWords();
+	auto result = instants.emplace(instant->getWords(), std::move(*instant));
+	if (!result.second) {
+		std::cout << "[Warning - Spells::registerInstantLuaEvent] Duplicate registered instant spell with words: "
+		          << words << std::endl;
+	}
+
+	return result.second;
 }
 
-bool Spells::registerRuneLuaEvent(RuneSpell* event)
+bool Spells::registerRuneLuaEvent(std::unique_ptr<RuneSpell> rune)
 {
-	RuneSpell_ptr rune{event};
-	if (rune) {
-		uint16_t id = rune->getRuneItemId();
-		auto result = runes.emplace(rune->getRuneItemId(), std::move(*rune));
-		if (!result.second) {
-			std::cout << "[Warning - Spells::registerRuneLuaEvent] Duplicate registered rune with id: " << id
-			          << std::endl;
-		}
-		return result.second;
+	if (!rune) {
+		return false;
 	}
 
-	return false;
+	const auto id = rune->getRuneItemId();
+	auto result = runes.emplace(rune->getRuneItemId(), std::move(*rune));
+	if (!result.second) {
+		std::cout << "[Warning - Spells::registerRuneLuaEvent] Duplicate registered rune with id: " << id << std::endl;
+	}
+
+	return result.second;
 }
 
 Spell* Spells::getSpellByName(const std::string& name)
@@ -183,7 +187,7 @@ Spell* Spells::getSpellByName(const std::string& name)
 	return spell;
 }
 
-RuneSpell* Spells::getRuneSpell(uint32_t id)
+RuneSpell* Spells::getRuneSpell(uint16_t id)
 {
 	auto it = runes.find(id);
 	if (it == runes.end()) {
@@ -257,8 +261,11 @@ Position Spells::getCasterPosition(const std::shared_ptr<Creature>& creature, Di
 	return getNextPosition(dir, creature->getPosition());
 }
 
-CombatSpell::CombatSpell(Combat_ptr combat, bool needTarget, bool needDirection) :
-    Event(&g_spells->getScriptInterface()), combat(combat), needDirection(needDirection), needTarget(needTarget)
+CombatSpell::CombatSpell(std::shared_ptr<Combat> combat, bool needTarget, bool needDirection) :
+    Event(&g_spells->getScriptInterface()),
+    combat(std::move(combat)),
+    needDirection(needDirection),
+    needTarget(needTarget)
 {}
 
 bool CombatSpell::loadScriptCombat()
@@ -394,7 +401,7 @@ bool Spell::configureSpell(const pugi::xml_node& node)
 	}
 
 	if ((attr = node.attribute("groupcooldown"))) {
-		groupCooldown = pugi::cast<uint32_t>(attr.value());
+		groupCooldown = std::chrono::milliseconds{pugi::cast<uint32_t>(attr.value())};
 	}
 
 	if ((attr = node.attribute("secondarygroup"))) {
@@ -415,7 +422,7 @@ bool Spell::configureSpell(const pugi::xml_node& node)
 	}
 
 	if ((attr = node.attribute("secondarygroupcooldown"))) {
-		secondaryGroupCooldown = pugi::cast<uint32_t>(attr.value());
+		secondaryGroupCooldown = std::chrono::milliseconds{pugi::cast<uint32_t>(attr.value())};
 	}
 
 	if ((attr = node.attribute("level")) || (attr = node.attribute("lvl"))) {
@@ -443,7 +450,7 @@ bool Spell::configureSpell(const pugi::xml_node& node)
 	}
 
 	if ((attr = node.attribute("cooldown")) || (attr = node.attribute("exhaustion"))) {
-		cooldown = pugi::cast<uint32_t>(attr.value());
+		cooldown = std::chrono::milliseconds{pugi::cast<uint32_t>(attr.value())};
 	}
 
 	if ((attr = node.attribute("premium")) || (attr = node.attribute("prem"))) {
@@ -740,22 +747,22 @@ void Spell::postCastSpell(const std::shared_ptr<Player>& player, bool finishedCa
 {
 	if (finishedCast) {
 		if (!player->hasFlag(PlayerFlag_HasNoExhaustion)) {
-			if (cooldown > 0) {
-				Condition* condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLCOOLDOWN,
-				                                                  cooldown, 0, false, spellId);
-				player->addCondition(condition);
+			if (cooldown > std::chrono::milliseconds::zero()) {
+				auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLCOOLDOWN, cooldown, 0,
+				                                            false, spellId);
+				player->addCondition(std::move(condition));
 			}
 
-			if (groupCooldown > 0) {
-				Condition* condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLGROUPCOOLDOWN,
-				                                                  groupCooldown, 0, false, group);
-				player->addCondition(condition);
+			if (groupCooldown > std::chrono::milliseconds::zero()) {
+				auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLGROUPCOOLDOWN,
+				                                            groupCooldown, 0, false, group);
+				player->addCondition(std::move(condition));
 			}
 
-			if (secondaryGroupCooldown > 0) {
-				Condition* condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLGROUPCOOLDOWN,
-				                                                  secondaryGroupCooldown, 0, false, secondaryGroup);
-				player->addCondition(condition);
+			if (secondaryGroupCooldown > std::chrono::milliseconds::zero()) {
+				auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLGROUPCOOLDOWN,
+				                                            secondaryGroupCooldown, 0, false, secondaryGroup);
+				player->addCondition(std::move(condition));
 			}
 		}
 
@@ -864,23 +871,22 @@ bool InstantSpell::playerCastInstant(const std::shared_ptr<Player>& player, std:
 			target = playerTarget;
 			if (!target || target->isRemoved() || target->isDead()) {
 				if (!casterTargetOrDirection) {
-					if (cooldown > 0) {
-						Condition* condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLCOOLDOWN,
-						                                                  cooldown, 0, false, spellId);
-						player->addCondition(condition);
+					if (cooldown > std::chrono::milliseconds::zero()) {
+						auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLCOOLDOWN,
+						                                            cooldown, 0, false, spellId);
+						player->addCondition(std::move(condition));
 					}
 
-					if (groupCooldown > 0) {
-						Condition* condition = Condition::createCondition(
-						    CONDITIONID_DEFAULT, CONDITION_SPELLGROUPCOOLDOWN, groupCooldown, 0, false, group);
-						player->addCondition(condition);
+					if (groupCooldown > std::chrono::milliseconds::zero()) {
+						auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLGROUPCOOLDOWN,
+						                                            groupCooldown, 0, false, group);
+						player->addCondition(std::move(condition));
 					}
 
-					if (secondaryGroupCooldown > 0) {
-						Condition* condition =
-						    Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLGROUPCOOLDOWN,
-						                               secondaryGroupCooldown, 0, false, secondaryGroup);
-						player->addCondition(condition);
+					if (secondaryGroupCooldown > std::chrono::milliseconds::zero()) {
+						auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLGROUPCOOLDOWN,
+						                                            secondaryGroupCooldown, 0, false, secondaryGroup);
+						player->addCondition(std::move(condition));
 					}
 
 					player->sendCancelMessage(ret);
@@ -928,22 +934,22 @@ bool InstantSpell::playerCastInstant(const std::shared_ptr<Player>& player, std:
 			ReturnValue ret = g_game.getPlayerByNameWildcard(param, playerTarget);
 
 			if (ret != RETURNVALUE_NOERROR) {
-				if (cooldown > 0) {
-					Condition* condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLCOOLDOWN,
-					                                                  cooldown, 0, false, spellId);
-					player->addCondition(condition);
+				if (cooldown > std::chrono::milliseconds::zero()) {
+					auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLCOOLDOWN, cooldown,
+					                                            0, false, spellId);
+					player->addCondition(std::move(condition));
 				}
 
-				if (groupCooldown > 0) {
-					Condition* condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLGROUPCOOLDOWN,
-					                                                  groupCooldown, 0, false, group);
-					player->addCondition(condition);
+				if (groupCooldown > std::chrono::milliseconds::zero()) {
+					auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLGROUPCOOLDOWN,
+					                                            groupCooldown, 0, false, group);
+					player->addCondition(std::move(condition));
 				}
 
-				if (secondaryGroupCooldown > 0) {
-					Condition* condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLGROUPCOOLDOWN,
-					                                                  secondaryGroupCooldown, 0, false, secondaryGroup);
-					player->addCondition(condition);
+				if (secondaryGroupCooldown > std::chrono::milliseconds::zero()) {
+					auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLGROUPCOOLDOWN,
+					                                            secondaryGroupCooldown, 0, false, secondaryGroup);
+					player->addCondition(std::move(condition));
 				}
 
 				player->sendCancelMessage(ret);
