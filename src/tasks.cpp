@@ -15,13 +15,13 @@ Dispatcher g_dispatcher;
 
 std::unique_ptr<Task> createTask(TaskFunc&& f, const std::source_location loc)
 {
-  auto task = std::make_unique<Task>(std::move(f));
+	auto task = std::make_unique<Task>(std::move(f));
 	if (ATLAS_TASK_EXECUTION_START_ENABLED()) task->setSourceLocation(loc);
 
-  return task;
+	return task;
 }
 
-std::unique_ptr<Task> createTask(uint32_t expiration, TaskFunc&& f)
+std::unique_ptr<Task> createTask(uint32_t expiration, TaskFunc&& f, const std::source_location loc)
 {
 	auto task = std::make_unique<Task>(expiration, std::move(f));
 	if (ATLAS_TASK_EXECUTION_START_ENABLED()) task->setSourceLocation(loc);

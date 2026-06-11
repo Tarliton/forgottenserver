@@ -40,12 +40,10 @@ public:
 		return expiration < std::chrono::steady_clock::now();
 	}
 
-	void setSourceLocation(const std::source_location loc) noexcept
+	void setSourceLocation([[maybe_unused]] const std::source_location loc) noexcept
 	{
 #ifdef ENABLE_USDT_PROBES
 		source_loc = loc;
-#else
-		(void)loc;
 #endif
 	}
 
@@ -61,8 +59,9 @@ private:
 #endif
 };
 
-std::unique_ptr<Task> createTask(TaskFunc&& f, std::source_location loc = std::source_location::current());
-std::unique_ptr<Task> createTask(uint32_t expiration, TaskFunc&& f, std::source_location loc = std::source_location::current());
+std::unique_ptr<Task> createTask(TaskFunc&& f, const std::source_location loc = std::source_location::current());
+std::unique_ptr<Task> createTask(uint32_t expiration, TaskFunc&& f,
+                                 const std::source_location loc = std::source_location::current());
 
 class Dispatcher : public ThreadHolder<Dispatcher>
 {
