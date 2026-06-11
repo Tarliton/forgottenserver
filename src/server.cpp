@@ -15,8 +15,8 @@ namespace {
 
 struct ConnectBlock
 {
-	uint64_t lastAttempt;
-	uint64_t blockTime = 0;
+	std::chrono::steady_clock::time_point lastAttempt;
+	std::chrono::steady_clock::time_point blockTime = std::chrono::steady_clock::time_point::min();
 	uint32_t count = 1;
 };
 
@@ -25,7 +25,7 @@ bool acceptConnection(const Connection::Address& clientIP)
 	static std::recursive_mutex mu;
 	std::lock_guard lock{mu};
 
-	uint64_t currentTime = OTSYS_TIME();
+	auto currentTime = std::chrono::steady_clock::now();
 
 	static std::map<Connection::Address, ConnectBlock> ipConnectMap;
 	auto it = ipConnectMap.find(clientIP);
@@ -36,17 +36,17 @@ bool acceptConnection(const Connection::Address& clientIP)
 
 	ConnectBlock& connectBlock = it->second;
 	if (connectBlock.blockTime > currentTime) {
-		connectBlock.blockTime += 250;
+		connectBlock.blockTime += 250ms;
 		return false;
 	}
 
-	int64_t timeDiff = currentTime - connectBlock.lastAttempt;
+	auto timeDiff = currentTime - connectBlock.lastAttempt;
 	connectBlock.lastAttempt = currentTime;
-	if (timeDiff <= 5000) {
+	if (timeDiff <= 5s) {
 		if (++connectBlock.count > 5) {
 			connectBlock.count = 0;
-			if (timeDiff <= 500) {
-				connectBlock.blockTime = currentTime + 3000;
+			if (timeDiff <= 500ms) {
+				connectBlock.blockTime = currentTime + 3s;
 				return false;
 			}
 		}
@@ -102,7 +102,7 @@ void ServiceManager::stop()
 
 	acceptors.clear();
 
-	death_timer.expires_after(std::chrono::seconds(3));
+	death_timer.expires_after(3s);
 	death_timer.async_wait([this](const boost::system::error_code&) { die(); });
 }
 
@@ -138,7 +138,7 @@ void ServicePort::accept()
 	                       });
 }
 
-void ServicePort::onAccept(Connection_ptr connection, const boost::system::error_code& error)
+void ServicePort::onAccept(std::shared_ptr<Connection> connection, const boost::system::error_code& error)
 {
 	if (!error) {
 		if (services.empty()) {
@@ -147,7 +147,7 @@ void ServicePort::onAccept(Connection_ptr connection, const boost::system::error
 
 		const auto& remote_ip = connection->getIP();
 		if (acceptConnection(remote_ip)) {
-			Service_ptr service = services.front();
+			const auto service = services.front();
 			if (service->is_single_socket()) {
 				connection->accept(service->make_protocol(connection));
 			} else {
@@ -163,14 +163,15 @@ void ServicePort::onAccept(Connection_ptr connection, const boost::system::error
 			close();
 			pendingStart = true;
 			g_scheduler.addEvent(createSchedulerTask(
-			    15000, [serverPort = this->serverPort, service = std::weak_ptr<ServicePort>(shared_from_this())]() {
+			    15s, [serverPort = this->serverPort, service = std::weak_ptr<ServicePort>(shared_from_this())]() {
 				    openAcceptor(service, serverPort);
 			    }));
 		}
 	}
 }
 
-Protocol_ptr ServicePort::make_protocol(NetworkMessage& msg, const Connection_ptr& connection) const
+std::shared_ptr<Protocol> ServicePort::make_protocol(NetworkMessage& msg,
+                                                     const std::shared_ptr<Connection>& connection) const
 {
 	uint8_t protocolID = msg.getByte();
 	for (auto& service : services) {
@@ -217,8 +218,7 @@ void ServicePort::open(uint16_t port)
 
 		pendingStart = true;
 		g_scheduler.addEvent(createSchedulerTask(
-		    15000,
-		    [port, service = std::weak_ptr<ServicePort>(shared_from_this())]() { openAcceptor(service, port); }));
+		    15s, [port, service = std::weak_ptr<ServicePort>(shared_from_this())]() { openAcceptor(service, port); }));
 	}
 }
 
@@ -230,12 +230,12 @@ void ServicePort::close()
 	}
 }
 
-bool ServicePort::add_service(const Service_ptr& new_svc)
+bool ServicePort::add_service(const std::shared_ptr<ServiceBase>& service)
 {
-	if (std::any_of(services.begin(), services.end(), [](const Service_ptr& svc) { return svc->is_single_socket(); })) {
+	if (std::any_of(services.begin(), services.end(), [](const auto& svc) { return svc->is_single_socket(); })) {
 		return false;
 	}
 
-	services.push_back(new_svc);
+	services.push_back(service);
 	return true;
 }

@@ -57,7 +57,7 @@ void Npc::reset()
 {
 	loaded = false;
 	isIdle = true;
-	walkTicks = 1500;
+	walkTicks = 1500ms;
 	pushable = true;
 	floorChange = false;
 	attackable = false;
@@ -87,7 +87,7 @@ void Npc::reload()
 	const bool hasSpectators = !spectators.empty();
 	setIdle(!hasSpectators);
 
-	if (hasSpectators && walkTicks > 0) {
+	if (hasSpectators && walkTicks > std::chrono::milliseconds::zero()) {
 		addEventWalk();
 	}
 
@@ -128,7 +128,7 @@ bool Npc::loadFromXml()
 	}
 
 	if ((attr = npcNode.attribute("walkinterval"))) {
-		walkTicks = pugi::cast<uint32_t>(attr.value());
+		walkTicks = std::chrono::milliseconds{pugi::cast<uint32_t>(attr.value())};
 	}
 
 	if ((attr = npcNode.attribute("walkradius"))) {
@@ -243,7 +243,7 @@ void Npc::onCreatureAppear(const std::shared_ptr<Creature>& creature, bool, Magi
 		const bool hasSpectators = !spectators.empty();
 		setIdle(!hasSpectators);
 
-		if (hasSpectators && walkTicks > 0) {
+		if (hasSpectators && walkTicks > std::chrono::milliseconds::zero()) {
 			addEventWalk();
 		}
 
@@ -326,7 +326,7 @@ void Npc::onPlayerCloseChannel(const std::shared_ptr<Player>& player)
 	}
 }
 
-void Npc::onThink(uint32_t interval)
+void Npc::onThink(std::chrono::milliseconds interval)
 {
 	Creature::onThink(interval);
 
@@ -383,7 +383,7 @@ bool Npc::getNextStep(Direction& dir, uint32_t& flags)
 		return true;
 	}
 
-	if (walkTicks == 0) {
+	if (walkTicks == std::chrono::milliseconds::zero()) {
 		return false;
 	}
 
@@ -664,14 +664,8 @@ int NpcScriptInterface::luaActionFollow(lua_State* L)
 		return 1;
 	}
 
-	const auto& followedPlayer = tfs::lua::getPlayer(L, 1);
-	if (followedPlayer) {
-		npc->setFollowCreature(followedPlayer);
-		tfs::lua::pushBoolean(L, npc->canFollowCreature(followedPlayer));
-	} else {
-		npc->removeFollowCreature();
-		tfs::lua::pushBoolean(L, true);
-	}
+	npc->setFollowCreature(tfs::lua::getPlayer(L, 1));
+	tfs::lua::pushBoolean(L, true);
 	return 1;
 }
 

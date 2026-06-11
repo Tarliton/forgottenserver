@@ -26,8 +26,6 @@ enum MoveEvent_t
 	MOVE_EVENT_NONE
 };
 
-using MoveEvent_ptr = std::unique_ptr<MoveEvent>;
-
 struct MoveEventList
 {
 	std::list<MoveEvent> moveEvent[MOVE_EVENT_LAST];
@@ -88,8 +86,8 @@ private:
 
 	LuaScriptInterface& getScriptInterface() override;
 	std::string_view getScriptBaseName() const override { return "movements"; }
-	Event_ptr getEvent(const std::string& nodeName) override;
-	bool registerEvent(Event_ptr event, const pugi::xml_node& node) override;
+	std::unique_ptr<Event> getEvent(const std::string& nodeName) override;
+	bool registerEvent(std::unique_ptr<Event> event, const pugi::xml_node& node) override;
 
 	void addEvent(MoveEvent moveEvent, int32_t id, MoveListMap& map);
 
@@ -120,7 +118,7 @@ using EquipFunction = std::function<ReturnValue(MoveEvent* moveEvent, const std:
 class MoveEvent final : public Event
 {
 public:
-	explicit MoveEvent(LuaScriptInterface* interface);
+	explicit MoveEvent(LuaScriptInterface* luaInterface);
 
 	MoveEvent_t getEventType() const;
 	void setEventType(MoveEvent_t type);

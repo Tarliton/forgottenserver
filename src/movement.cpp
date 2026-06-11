@@ -63,17 +63,17 @@ void MoveEvents::clear(bool fromLua)
 
 LuaScriptInterface& MoveEvents::getScriptInterface() { return scriptInterface; }
 
-Event_ptr MoveEvents::getEvent(const std::string& nodeName)
+std::unique_ptr<Event> MoveEvents::getEvent(const std::string& nodeName)
 {
 	if (!boost::iequals(nodeName, "movevent")) {
 		return nullptr;
 	}
-	return Event_ptr(new MoveEvent(&scriptInterface));
+	return std::make_unique<MoveEvent>(&scriptInterface);
 }
 
-bool MoveEvents::registerEvent(Event_ptr event, const pugi::xml_node& node)
+bool MoveEvents::registerEvent(std::unique_ptr<Event> event, const pugi::xml_node& node)
 {
-	MoveEvent_ptr moveEvent{static_cast<MoveEvent*>(event.release())}; // event is guaranteed to be a MoveEvent
+	std::unique_ptr<MoveEvent> moveEvent{static_cast<MoveEvent*>(event.release())};
 
 	const MoveEvent_t eventType = moveEvent->getEventType();
 	if (eventType == MOVE_EVENT_ADD_ITEM || eventType == MOVE_EVENT_REMOVE_ITEM) {
@@ -175,7 +175,7 @@ bool MoveEvents::registerEvent(Event_ptr event, const pugi::xml_node& node)
 
 bool MoveEvents::registerLuaFunction(MoveEvent* event)
 {
-	MoveEvent_ptr moveEvent{event};
+	const std::unique_ptr<MoveEvent> moveEvent{event};
 
 	const MoveEvent_t eventType = moveEvent->getEventType();
 	if (eventType == MOVE_EVENT_ADD_ITEM || eventType == MOVE_EVENT_REMOVE_ITEM) {
@@ -213,8 +213,7 @@ bool MoveEvents::registerLuaFunction(MoveEvent* event)
 
 bool MoveEvents::registerLuaEvent(MoveEvent* event)
 {
-	MoveEvent_ptr moveEvent{event};
-
+	const std::unique_ptr<MoveEvent> moveEvent{event};
 	const MoveEvent_t eventType = moveEvent->getEventType();
 	if (eventType == MOVE_EVENT_ADD_ITEM || eventType == MOVE_EVENT_REMOVE_ITEM) {
 		if (moveEvent->getTileItem()) {
@@ -491,7 +490,7 @@ uint32_t MoveEvents::onItemMove(const std::shared_ptr<Item>& item, const std::sh
 	return ret;
 }
 
-MoveEvent::MoveEvent(LuaScriptInterface* interface) : Event(interface) {}
+MoveEvent::MoveEvent(LuaScriptInterface* luaInterface) : Event(luaInterface) {}
 
 std::string_view MoveEvent::getScriptEventName() const
 {
@@ -714,14 +713,13 @@ ReturnValue MoveEvent::EquipItem(MoveEvent* moveEvent, const std::shared_ptr<Pla
 	}
 
 	if (it.abilities->invisible) {
-		Condition* condition = Condition::createCondition(static_cast<ConditionId_t>(slot), CONDITION_INVISIBLE, -1, 0);
-		player->addCondition(condition);
+		auto condition = Condition::createCondition(static_cast<ConditionId_t>(slot), CONDITION_INVISIBLE, -1ms, 0);
+		player->addCondition(std::move(condition));
 	}
 
 	if (it.abilities->manaShield) {
-		Condition* condition =
-		    Condition::createCondition(static_cast<ConditionId_t>(slot), CONDITION_MANASHIELD, -1, 0);
-		player->addCondition(condition);
+		auto condition = Condition::createCondition(static_cast<ConditionId_t>(slot), CONDITION_MANASHIELD, -1ms, 0);
+		player->addCondition(std::move(condition));
 	}
 
 	if (it.abilities->speed != 0) {
@@ -734,26 +732,25 @@ ReturnValue MoveEvent::EquipItem(MoveEvent* moveEvent, const std::shared_ptr<Pla
 	}
 
 	if (it.abilities->regeneration) {
-		Condition* condition =
-		    Condition::createCondition(static_cast<ConditionId_t>(slot), CONDITION_REGENERATION, -1, 0);
+		auto condition = Condition::createCondition(static_cast<ConditionId_t>(slot), CONDITION_REGENERATION, -1ms, 0);
 
 		if (it.abilities->healthGain != 0) {
 			condition->setParam(CONDITION_PARAM_HEALTHGAIN, it.abilities->healthGain);
 		}
 
-		if (it.abilities->healthTicks != 0) {
-			condition->setParam(CONDITION_PARAM_HEALTHTICKS, it.abilities->healthTicks);
+		if (it.abilities->healthTicks != std::chrono::milliseconds::zero()) {
+			condition->setParam(CONDITION_PARAM_HEALTHTICKS, it.abilities->healthTicks.count());
 		}
 
 		if (it.abilities->manaGain != 0) {
 			condition->setParam(CONDITION_PARAM_MANAGAIN, it.abilities->manaGain);
 		}
 
-		if (it.abilities->manaTicks != 0) {
-			condition->setParam(CONDITION_PARAM_MANATICKS, it.abilities->manaTicks);
+		if (it.abilities->manaTicks != std::chrono::milliseconds::zero()) {
+			condition->setParam(CONDITION_PARAM_MANATICKS, it.abilities->manaTicks.count());
 		}
 
-		player->addCondition(condition);
+		player->addCondition(std::move(condition));
 	}
 
 	// skill modifiers

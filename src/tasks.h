@@ -11,14 +11,13 @@
 
 using TaskFunc = std::move_only_function<void(void)>;
 const int DISPATCHER_TASK_EXPIRATION = 2000;
-const auto SYSTEM_TIME_ZERO = std::chrono::system_clock::time_point(std::chrono::milliseconds(0));
 
 class Task
 {
 public:
 	explicit Task(TaskFunc&& f) : func(std::move(f)) {}
 	Task(uint32_t ms, TaskFunc&& f) :
-	    expiration(std::chrono::system_clock::now() + std::chrono::milliseconds(ms)), func(std::move(f))
+	    expiration(std::chrono::steady_clock::now() + std::chrono::milliseconds(ms)), func(std::move(f))
 	{}
 
 	virtual ~Task() = default;
@@ -31,14 +30,14 @@ public:
 			ATLAS_TASK_EXECUTION_END(source_loc.file_name(), source_loc.line(), source_loc.function_name());
 	}
 
-	void setDontExpire() { expiration = SYSTEM_TIME_ZERO; }
+	void setDontExpire() { expiration = std::chrono::steady_clock::time_point::min(); }
 
 	bool hasExpired() const
 	{
-		if (expiration == SYSTEM_TIME_ZERO) {
+		if (expiration == std::chrono::steady_clock::time_point::min()) {
 			return false;
 		}
-		return expiration < std::chrono::system_clock::now();
+		return expiration < std::chrono::steady_clock::now();
 	}
 
 	void setSourceLocation(const std::source_location loc) noexcept
@@ -51,7 +50,7 @@ public:
 	}
 
 protected:
-	std::chrono::system_clock::time_point expiration = SYSTEM_TIME_ZERO;
+	std::chrono::steady_clock::time_point expiration = std::chrono::steady_clock::time_point::min();
 
 private:
 	// Expiration has another meaning for scheduler tasks, then it is the time the task should be added to the
@@ -62,15 +61,13 @@ private:
 #endif
 };
 
-using Task_ptr = std::unique_ptr<Task>;
-
-Task_ptr createTask(TaskFunc&& f, std::source_location loc = std::source_location::current());
-Task_ptr createTask(uint32_t expiration, TaskFunc&& f, std::source_location loc = std::source_location::current());
+std::unique_ptr<Task> createTask(TaskFunc&& f, std::source_location loc = std::source_location::current());
+std::unique_ptr<Task> createTask(uint32_t expiration, TaskFunc&& f, std::source_location loc = std::source_location::current());
 
 class Dispatcher : public ThreadHolder<Dispatcher>
 {
 public:
-	void addTask(Task_ptr&& task);
+	void addTask(std::unique_ptr<Task>&& task);
 
 	void addTask(TaskFunc&& f, const std::source_location loc = std::source_location::current())
 	{
@@ -98,7 +95,7 @@ private:
 	std::mutex taskLock;
 	std::condition_variable taskSignal;
 
-	std::vector<Task_ptr> taskList;
+	std::vector<std::unique_ptr<Task>> taskList;
 	uint64_t dispatcherCycle = 0;
 };
 

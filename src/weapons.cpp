@@ -85,7 +85,7 @@ void Weapons::loadDefaults()
 	}
 }
 
-Event_ptr Weapons::getEvent(const std::string& nodeName)
+std::unique_ptr<Event> Weapons::getEvent(const std::string& nodeName)
 {
 	if (boost::iequals(nodeName, "melee")) {
 		return std::make_unique<WeaponMelee>(&scriptInterface);
@@ -97,9 +97,9 @@ Event_ptr Weapons::getEvent(const std::string& nodeName)
 	return nullptr;
 }
 
-bool Weapons::registerEvent(Event_ptr event, const pugi::xml_node&)
+bool Weapons::registerEvent(std::unique_ptr<Event> event, const pugi::xml_node&)
 {
-	Weapon_ptr weapon{static_cast<Weapon*>(event.release())};
+	std::unique_ptr<Weapon> weapon{static_cast<Weapon*>(event.release())};
 	uint16_t weaponId = weapon->getID();
 
 	auto result = weapons.emplace(weaponId, std::move(weapon));
@@ -109,7 +109,7 @@ bool Weapons::registerEvent(Event_ptr event, const pugi::xml_node&)
 	return result.second;
 }
 
-bool Weapons::registerLuaEvent(Weapon_ptr weapon)
+bool Weapons::registerLuaEvent(std::shared_ptr<Weapon> weapon)
 {
 	auto weaponId = weapon->getID();
 	weapons[weaponId] = std::move(weapon);
@@ -428,7 +428,7 @@ void Weapon::addVocationWeaponSet(const std::string& vocationName)
 	}
 }
 
-WeaponMelee::WeaponMelee(LuaScriptInterface* interface) : Weapon(interface)
+WeaponMelee::WeaponMelee(LuaScriptInterface* luaInterface) : Weapon(luaInterface)
 {
 	params.blockedByArmor = true;
 	params.blockedByShield = true;
@@ -527,7 +527,7 @@ int32_t WeaponMelee::getWeaponDamage(const std::shared_ptr<const Player>& player
 	return -normal_random(0, maxValue);
 }
 
-WeaponDistance::WeaponDistance(LuaScriptInterface* interface) : Weapon(interface)
+WeaponDistance::WeaponDistance(LuaScriptInterface* luaInterface) : Weapon(luaInterface)
 {
 	params.blockedByArmor = true;
 	params.combatType = COMBAT_PHYSICALDAMAGE;
@@ -693,7 +693,7 @@ bool WeaponDistance::useWeapon(const std::shared_ptr<Player>& player, const std:
 			for (auto&& [dx, dy] : destList | std::views::as_const) {
 				// Blocking tiles or tiles without ground ain't valid targets for spears
 				if (const auto& tmpTile = g_game.map.getTile(destPos.x + dx, destPos.y + dy, destPos.z)) {
-					if (!tmpTile->hasFlag(TILESTATE_IMMOVABLEBLOCKSOLID) && tmpTile->getGround()) {
+					if (!tmpTile->hasFlag(TILESTATE_IMMOVABLEBLOCKSOLID) && tmpTile->hasGround()) {
 						destTile = tmpTile;
 						break;
 					}

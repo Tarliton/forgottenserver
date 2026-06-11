@@ -1,16 +1,14 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "dependencies": [
+    "boost-algorithm",
     "boost-asio",
     "boost-container",
+    "boost-container-hash",
     "boost-iostreams",
     "boost-lockfree",
     "boost-stacktrace",
     "boost-system",
-    {
-      "name": "libiconv",
-      "platform": "osx"
-    },
     "lua",
     "openssl",
     "pugixml",
@@ -19,6 +17,12 @@
     "zlib"
   ],
   "features": {
+    "boost-mysql": {
+      "description": "Use the Boost.MySQL backend instead of the libmariadb/libmysql C client",
+      "dependencies": [
+        "boost-mysql"
+      ]
+    },
     "http": {
       "description": "Enable HTTP support",
       "dependencies": [
@@ -43,11 +47,17 @@
       "dependencies": [
         "boost-test"
       ]
+    },
+    "benchmarks": {
+      "description": "Build benchmarks",
+      "dependencies": [
+        "benchmark"
+      ]
     }
   },
   "default-features": [
     "http",
     "libmariadb"
   ],
-  "builtin-baseline": "66c0373dc7fca549e5803087b9487edfe3aca0a1"
+  "builtin-baseline": "62159a45e18f3a9ac0548628dcaf74fcb60c6ff9"
 }
